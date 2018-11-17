@@ -384,3 +384,302 @@ ALTER DATABASE DROP LOGFILE GROUP 20;
 ```
 9. Supprimer les fichiers de reprise qui se trouvent dans le DISK2
 > Question faite manuellement
+
+# TP3 :  Gestion des fichiers deonnées et des tablespaces 
+
+### Gestion des fichiers de données et des tablespaces
+
+
+1. Dans le répertoire /u01/app/oracle/oradata/myinst/, créer les sous répertoires suivants : Disk1, Disk2, Disk3 et Disk4. 
+```sh
+cd  /u01/app/oracle/oradata/myinst/
+mkdir Disk1 Disk2 Disk3 Disk4
+```
+
+2. Connectez vous  en tant que SYS  à l’instance oracle myinst que  vous avez  créé  lors du TP précédent. Vérifier que vous êtes connectés à la bonne instance. Si ce n’est pas la bonne instance  alors il faut arrêter l’instance courante et redémarrer l’instance 
+```sql
+startup upgrade pfile=/u01/app/oracle/admin/myinst/pfile/initmyinst.ora
+```
+
+3. Créer des tablespaces permanents avec les noms et le type de stockage suivants :
+
+- DATA01 (taille de 2Mo)
+```sql
+CREATE TABLESPACE DATA01 DATAFILE '/u01/app/oracle/oradata/myinst/Disk4/data01.dbf' SIZE 2M;
+```
+>Tablespace created.
+
+
+- TEMP pour les segments temporaires (activation de la non augmentation de la taille d’extent). 
+```sql
+CREATE TEMPORARY TABLESPACE TEMP TEMPFILE '/u01/app/oracle/oradata/myinst/Disk3/temp02.dbf'  SIZE 5M AUTOEXTEND OFF;
+```
+>Tablespace created.
+
+- INDX01 pour les index avec stockage par défaut (activez l’extension automatique de 500 K si des extents supplémentaires sont requis). 
+```sql
+CREATE TABLESPACE INDX01 DATAFILE '/u01/app/oracle/oradata/myinst/Disk3/indx01.dbf' SIZE 3M AUTOEXTEND ON NEXT 500K;
+```
+>Tablespace created.
+
+- RONLY pour les tables en lecture seule avec stockage par défaut create tablespace RONLY datafile ’/u01/app/oracle/oradata/myinst/Disk1/ronly01.dbf’ size 2M; 
+```sql
+alter database datafile '/u01/app/oracle/oradata/myinst/system01myinst.dbf' autoextend on next 100M;
+CREATE TABLESPACE RONLY DATAFILE '/u01/app/oracle/oradata/myinst/Disk1/ronly01.dbf' SIZE 2M; 
+```
+
+4. Donner la liste des tablespaces par défaut
+```sql
+startup upgrade pfile=/u01/app/oracle/admin/myinst/pfile/initmyinst.ora
+select * from database_properties where property_name like '%TABLESPACE';
+```
+>DEFAULT_TEMP_TABLESPACE  ->  TEMPTS1
+Name of default temporary tablespace
+DEFAULT_PERMANENT_TABLESPACE -> SYSTEM
+Name of default permanent tablespace
+5. Mettre le tablespace DATA01 comme tablespace par défaut. Vérifier votre opération.
+```sql
+ALTER DATABASE DEFAULT TABLESPACE  DATA01'; 
+```
+>Database altered.
+6. Quels sont les tablespaces temporaires par défaut actuels?
+```sql
+select * from database_properties where property_name like '%TABLESPACE';
+```
+>DEFAULT_TEMP_TABLESPACE -> TEMPTS1
+Name of default temporary tablespace
+7. Afficher le liste des tablespaces avec la clause de stockage par défaut de chaque tablespace 
+```sql
+select  storage from database_properties;
+```
+8. Ajouter le tablespace TEMP comme tablespace temporaire par défaut 
+```sql
+ALTER DATABASE DEFAULT TEMPORARY TABLESPACE  TEMP;
+```
+>Database altered.
+
+9. Quelles sont les deux manières pour augmenter la taille d’un tablespace? 
+
+- Augmenter la taille d’un fichier existant 
+```sql
+alter database datafile '/u01/app/oracle/oradata/myinst/fichier.dbf' autoextend on next 100M;
+```
+- Ajouter un nouveau fichier 
+```sql
+ALTER TABLESPACE users ADD DATAFILE '/u01/app/oracle/oradata/myinst/fichier.dbf' size 100M;
+```
+
+
+10. Déplacer le tablespace INDX01 vers DISK1
+```sh
+cd /u01/app/oracle/oradata/myinst/Disk3/
+mv indx01.dbf /u01/app/oracle/oradata/myinst/Disk1
+```
+
+11. Mettre le tablespace RONLY en lecture seule après y avoir créé une table. 
+```sql
+ALTER TABLESPACE RONLY READ ONLY;
+```
+>Tablespace altered.
+
+12. Supprimez le tablespace RONLY et vérifiez l’opération. 
+```sql
+drop tablespace RONLY INCLUDING CONTENTS; 
+```
+>Tablespace dropped.
+```sql
+select tablespace_name from dba_tablespaces;
+```
+|TABLESPACE_NAME|
+|--------|
+|SYSTEM|
+|SYSAUX|
+|UNDOTBS1|
+|TEMPTS1|
+|DATA01|
+|TEMP|
+|INDX01|
+
+13. Afficher la liste des tablespaces, les fichiers associés et la taille de chaque fichier 
+```sql
+SELECT tablespace_name, FILE_NAME, BLOCKS, FROM DBA_DATA_FILES;
+```
+|TABLESPACE_NAME|FILE_NAME|BLOCKS|
+|--------|--------|--------|
+| SYSTEM  |   /u01/app/oracle/oradata/myinst/system01myinst.d  |  25600  |
+| SYSAUX  |   /u01/app/oracle/oradata/myinst/sysaux01.dbf  |  41600  |
+| UNDOTBS1  |  /u01/app/oracle/oradata/myinst/undotbs01.dbf |  35968  |  
+| DATA01  |   /u01/app/oracle/oradata/myinst/Disk4/data01.dbf |  256  | 
+| INDX01  |  /u01/app/oracle/oradata/myinst/Disk3/indx01.dbf  |  384  | 
+
+
+14. Afficher la taille totale et le nombre de fichier de chaque tablespace
+
+15. Afficher la taille de l’espace libre dans chaque tablespace 
+```sql
+SELECT TABLESPACE_NAME , FILE_NAME MAX(blocks) "MAXIMUM", MIN(blocks) "MINIMUM", SUM(blocks) "TOTAL" FROM DBA_FREE_SPACE GROUP BY TABLESPACE_NAME,  FILE_NAME;
+```
+
+16. Expliquer ce que fait la requête suivante? Exécuter la requête et interpréter le résultat. 
+```sql
+SELECT   a.tablespace_name,   ROUND   (((c.BYTES - NVL   (b.BYTES,   0))   /   c.BYTES) * 100,2) percentage_used,  c.BYTES  /  1024  /  1024  space_allocated,  ROUND  (c.BYTES  / 1024  /  1024 - NVL (b.BYTES, 0) / 1024 / 1024,2) space_used, ROUND (NVL (b.BYTES, 0) / 1024 / 1024, 2) space_free,c.DATAFILES  FROM  dba_tablespaces  a,  (  SELECT  tablespace_name,  SUM  (BYTES)  BYTES  FROM dba_free_space GROUP BY tablespace_name ) b, (SELECT COUNT (1) DATAFILES, SUM (BYTES) BYTES, ablespace_name FROM dba_data_files GROUP BY tablespace_name ) c WHERE b.tablespace_name(+) = a.tablespace_name AND c.tablespace_name(+) = a.tablespace_name ORDER BY NVL (((c.BYTES - NVL (b.BYTES, 0)) / c.BYTES), 0) DESC;
+```
+> Cette requête permet de trouver de l'espace libre sur l'espace de table 
+
+
+# TP4 - Gestion de la sécurité
+
+### Gestion des utilisateurs
+
+1. Créez  l’utilisateur  bob  avec  le  mot  de  passe  along  avec  comme  tablespace  par défaut DATA01. 
+```sql
+CREATE USER bob IDENTIFIED BY along DEFAULT TABLESPACE DATA01;
+```
+>User created.
+
+
+2. Créez un utilisateur kay avec le mot de passe mary et donner lui les droits nécessaires pour pouvoir se connecter et créer des objets. 
+```sql
+CREATE USER kay IDENTIFIED BY mary;
+```
+>User created.
+```sql
+GRANT CONNECT,CREATE table TO kay;
+```
+>Grant succeeded.
+
+
+
+a) Ouvrir une deuxième session sqlplus et se connecter en tant que kay.
+```sh
+sqlplus
+jay
+mary
+```
+b. A partir de la session kay, copier la table EMP à partir du schéma SCOTT dans le compte de kay. Que se passe-t-il? Corriger le problème et refaire une tentative de création de la table emp par kay
+
+```sql
+CREATE TABLE EMP AS ( SELECT * FROM SCOTT.EMP);
+```
+3. A partir du dictionnaire de données (vueDBA_Users), affichez les informations (username, l’état du compte, tablespace par défaut) sur bob et kay. 
+```sql
+
+```
+
+5.  En  tant  que  SYSTEM,  alloué  à  kay  un  quota  de  5M  sur  le  tablespace  DATA01. Vérifier  votre opération
+```sql
+ALTER USER KAY QUOTA 5M ON DATA01;
+```
+>User altered.
+6. En tant que SYSTEM, supprimez le quota de kay sur son tablespace par défaut.
+```sql
+ALTER USER KAY QUOTA 0 ON DATA01;
+```
+>User altered.
+7. Supprimez le compte de kay drop user kay cascade; 
+```sql
+DROP USER kay CASCADE.
+```
+
+8. bob a oublié son mot de passe. Allouez-lui le mot de passe olink et demandez lui de changer son mot de passe à sa prochaine connexion
+```sql
+ALTER USER bob IDENTIFIED BY olink PASSWORD EXPIRE;
+```
+>User altered.
+
+
+9. Lancez un shell et connectez-vous en tant que bob. Que se passe-t-il? 
+>On lui demande de changer son mot de passe immediatement.
+
+# Gestion des profils
+1. Affichez les informations sur les profils, puis toutes les ressources du profil DEFAULT
+```sql
+SELECT USERNAME, PROFILE, ACCOUNT_STATUS FROM DBA_USERS;
+```
+
+|USERNAME|PROFILE|ACCOUNT_STATUS|
+|--------|--------|--------|
+| MGMT_VIEW  |  DEFAULT  |  OPEN  |
+| SYS  |   DEFAULT  |  OPEN  |
+| SYSTEM  | DEFAULT |  OPEN  | 
+
+>37 rows selected.
+
+2.(a)  Créez  un  nouveau  profil  de  telle  sorte  que  2  sessions  simultanées  par  utilisateur  soient permises et que le temps d’inactivité soit limité à une minute. Vérifier que votre opération s’est bien exécutée
+```sql
+CREATE PROFILE myprofil LIMIT SESSIONS_PER_USER  2 CONNECT_TIME 1 ; 
+```
+>Profile created.
+
+b) Allouez ce profil à bob et vérifier votre opération
+```sql
+ALTER USER bob PROFILE myprofil; 
+```
+>User altered.
+
+- Activer la limitation des ressources. 
+```sql
+ALTER SYSTEM SET RESOURCE_LIMIT = TRUE;
+```
+>System altered.
+
+c. En utilisant SQLPLUS, tentez d’ouvrir 3 sessions pour l’utilisateur bob.
+
+>ORA-02391: exceeded simultaneous SESSIONS_PER_USER limit
+
+# Gestion des privilèges
+
+1.En tant que SYSTEM, créez l’utilisateur kay et donnez-lui la possibilité de se connecter à la 
+base de données et de créer des objets dans son schéma. 
+```sql
+
+```
+
+
+2.(a)  Connectez-vous  en  tant  que  SCOTT/tiger  et  donnez  à  kay  le  privilège  select  sur les SCOTT.EMP et SCOTT.dep. 
+```sql
+
+```
+
+
+(b)  Connectez-vous  en  tant  que  kay  et  créez  deux  tables  EMP  et  DEPT  en  copiant  les 
+données des tables correspondantes de scott.
+
+```sql
+
+```
+
+
+(c)  Connectez-vous  en  tant  que  SYSTEM/oracle,  accordez  à  bob  la  possibilité  de sélectionner des données dans la table DEPT de kay. 
+
+```sql
+
+```
+
+
+(d) Donnez également à bob le privilège de faire un select sur la table EMP de kay avec le 
+droit d’administrer ce privilège 
+
+```sql
+
+```
+
+3.(a) Examinez les vues du dictionnaire de données qui enregistrent ces informations. 
+```sql
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
