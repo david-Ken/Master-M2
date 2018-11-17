@@ -1,0 +1,32 @@
+Rapport hpc
+
+B) Use of a scientific library in C++ for stochastic simulation (CLHEP)
+
+1)  tar zxvf CLHEP-Random.tzg 
+
+2)  
+    ./configure --prefix=/home/david/Bureau/TP_M2/TP_HPC/Random/
+
+    time make
+
+Total compilation time :
+
+real	2m17,847s
+user	2m0,695s
+sys	0m9,416s
+
+sudo rm -rf ./Random
+
+ tar zxvf CLHEP-Random.tzg 
+
+  ./configure --prefix=/home/david/Bureau/TP_M2/TP_HPC/Random/
+
+time make –j32
+
+real	1m29,390s
+user	2m28,449s
+sys	0m10,477s
+
+We can see that the real waiting time reduced due to the parallel compilation time with 32 logical cores
+make install 
+
